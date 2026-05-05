@@ -29,7 +29,7 @@ add_library(Eigen3::Eigen ALIAS vmc_eigen)
 target_include_directories(vmc_eigen SYSTEM INTERFACE "${eigen_SOURCE_DIR}")
 
 add_library(vmc_core)
-target_sources(vmc_core PRIVATE src/version.cpp)
+target_sources(vmc_core PRIVATE src/lattice.cpp src/version.cpp)
 target_include_directories(
   vmc_core
   PUBLIC
@@ -60,7 +60,7 @@ if(VMC_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(googletest)
 
-  add_executable(vmc_tests tests/version_test.cpp)
+  add_executable(vmc_tests tests/lattice_test.cpp tests/version_test.cpp)
   target_link_libraries(vmc_tests PRIVATE vmc_core GTest::gtest_main GTest::gmock)
 
   include(GoogleTest)
