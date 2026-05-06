@@ -4,7 +4,9 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -16,6 +18,7 @@ using vmc::BoundaryCondition;
 using vmc::CondensateWaveFunction;
 using vmc::JastrowWaveFunction;
 using vmc::Lattice;
+using vmc::MetropolisRunStats;
 using vmc::MetropolisStepResult;
 using vmc::OccupancyConstraint;
 using vmc::WaveFunction;
@@ -171,6 +174,128 @@ TEST(MetropolisTest, SameSeedProducesSameTransition) {
   EXPECT_DOUBLE_EQ(first.acceptance_probability, second.acceptance_probability);
   EXPECT_THAT(occupations_of(first_state), testing::ContainerEq(occupations_of(second_state)));
   EXPECT_THAT(positions_of(first_state), testing::ContainerEq(positions_of(second_state)));
+}
+
+TEST(MetropolisTest, EmptyRunStatsHaveZeroRates) {
+  const MetropolisRunStats stats{
+      .attempted_steps = 0,
+      .proposed_steps = 0,
+      .accepted_steps = 0,
+  };
+
+  EXPECT_DOUBLE_EQ(stats.proposal_rate(), 0.0);
+  EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 0.0);
+}
+
+TEST(MetropolisTest, RunStatsComputeRates) {
+  const MetropolisRunStats stats{
+      .attempted_steps = 8,
+      .proposed_steps = 6,
+      .accepted_steps = 3,
+  };
+
+  EXPECT_DOUBLE_EQ(stats.proposal_rate(), 0.75);
+  EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 0.5);
+}
+
+TEST(MetropolisTest, RunStepsWithZeroStepsDoesNothing) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(2);
+  BosonState state = BosonState::from_boson_positions(2, {0}, OccupancyConstraint::SoftCore);
+
+  const MetropolisRunStats stats = run_metropolis_steps(lattice, wave_function, state, 0, rng);
+
+  EXPECT_EQ(stats.attempted_steps, 0);
+  EXPECT_EQ(stats.proposed_steps, 0);
+  EXPECT_EQ(stats.accepted_steps, 0);
+  EXPECT_THAT(occupations_of(state), ElementsAre(1, 0));
+  EXPECT_THAT(positions_of(state), ElementsAre(0));
+}
+
+TEST(MetropolisTest, RunStepsCountsIsolatedBosonAttemptsWithoutProposals) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(1, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(1);
+  BosonState state = BosonState::from_boson_positions(1, {0}, OccupancyConstraint::SoftCore);
+
+  const MetropolisRunStats stats = run_metropolis_steps(lattice, wave_function, state, 5, rng);
+
+  EXPECT_EQ(stats.attempted_steps, 5);
+  EXPECT_EQ(stats.proposed_steps, 0);
+  EXPECT_EQ(stats.accepted_steps, 0);
+  EXPECT_DOUBLE_EQ(stats.proposal_rate(), 0.0);
+  EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 0.0);
+  EXPECT_THAT(occupations_of(state), ElementsAre(1));
+  EXPECT_THAT(positions_of(state), ElementsAre(0));
+}
+
+TEST(MetropolisTest, RunStepsCountsGuaranteedAcceptedMoves) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(2);
+  BosonState state = BosonState::from_boson_positions(2, {0}, OccupancyConstraint::SoftCore);
+
+  const MetropolisRunStats stats = run_metropolis_steps(lattice, wave_function, state, 4, rng);
+
+  EXPECT_EQ(stats.attempted_steps, 4);
+  EXPECT_EQ(stats.proposed_steps, 4);
+  EXPECT_EQ(stats.accepted_steps, 4);
+  EXPECT_DOUBLE_EQ(stats.proposal_rate(), 1.0);
+  EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 1.0);
+}
+
+TEST(MetropolisTest, RunStepsCountsHardCoreRejections) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(2);
+  BosonState state = BosonState::from_boson_positions(2, {0, 1}, OccupancyConstraint::HardCore);
+
+  const MetropolisRunStats stats = run_metropolis_steps(lattice, wave_function, state, 4, rng);
+
+  EXPECT_EQ(stats.attempted_steps, 4);
+  EXPECT_EQ(stats.proposed_steps, 4);
+  EXPECT_EQ(stats.accepted_steps, 0);
+  EXPECT_DOUBLE_EQ(stats.proposal_rate(), 1.0);
+  EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 0.0);
+  EXPECT_THAT(occupations_of(state), ElementsAre(1, 1));
+  EXPECT_THAT(positions_of(state), ElementsAre(0, 1));
+}
+
+TEST(MetropolisTest, RunSweepsAttemptsSweepCountTimesBosonCountSteps) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::square(3, 3, BoundaryCondition::Periodic);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(9);
+  BosonState state = BosonState::from_boson_positions(9, {0, 2, 4}, OccupancyConstraint::SoftCore);
+
+  const MetropolisRunStats stats = run_metropolis_sweeps(lattice, wave_function, state, 7, rng);
+
+  EXPECT_EQ(stats.attempted_steps, 21);
+  EXPECT_EQ(stats.proposed_steps, 21);
+}
+
+TEST(MetropolisTest, RunSweepsWithZeroBosonsAttemptsZeroSteps) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(3, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(3);
+  BosonState state = BosonState::empty(3, OccupancyConstraint::SoftCore);
+
+  const MetropolisRunStats stats = run_metropolis_sweeps(lattice, wave_function, state, 7, rng);
+
+  EXPECT_EQ(stats.attempted_steps, 0);
+  EXPECT_EQ(stats.proposed_steps, 0);
+  EXPECT_EQ(stats.accepted_steps, 0);
+}
+
+TEST(MetropolisTest, RunSweepsRejectsStepCountOverflow) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(2);
+  BosonState state = BosonState::from_boson_positions(2, {0, 1}, OccupancyConstraint::SoftCore);
+
+  EXPECT_THROW(run_metropolis_sweeps(lattice, wave_function, state,
+                                     std::numeric_limits<std::size_t>::max(), rng),
+               std::overflow_error);
 }
 
 }  // namespace

@@ -1,6 +1,8 @@
 #include "vmc/metropolis.hpp"
 
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 
 namespace vmc {
 namespace {
@@ -14,6 +16,20 @@ double acceptance_probability_from_log_ratio(double log_ratio) {
 }
 
 }  // namespace
+
+double MetropolisRunStats::proposal_rate() const {
+  if (attempted_steps == 0) {
+    return 0.0;
+  }
+  return static_cast<double>(proposed_steps) / static_cast<double>(attempted_steps);
+}
+
+double MetropolisRunStats::acceptance_rate() const {
+  if (proposed_steps == 0) {
+    return 0.0;
+  }
+  return static_cast<double>(accepted_steps) / static_cast<double>(proposed_steps);
+}
 
 MetropolisStepResult metropolis_step(const Lattice& lattice, const WaveFunction& wave_function,
                                      BosonState& state, std::mt19937_64& rng) {
@@ -51,6 +67,41 @@ MetropolisStepResult metropolis_step(const Lattice& lattice, const WaveFunction&
       .hop = hop,
       .acceptance_probability = acceptance_probability,
   };
+}
+
+MetropolisRunStats run_metropolis_steps(const Lattice& lattice, const WaveFunction& wave_function,
+                                        BosonState& state, std::size_t step_count,
+                                        std::mt19937_64& rng) {
+  MetropolisRunStats stats{
+      .attempted_steps = 0,
+      .proposed_steps = 0,
+      .accepted_steps = 0,
+  };
+
+  for (std::size_t step = 0; step < step_count; ++step) {
+    const MetropolisStepResult result = metropolis_step(lattice, wave_function, state, rng);
+
+    ++stats.attempted_steps;
+    if (result.proposed) {
+      ++stats.proposed_steps;
+    }
+    if (result.accepted) {
+      ++stats.accepted_steps;
+    }
+  }
+
+  return stats;
+}
+
+MetropolisRunStats run_metropolis_sweeps(const Lattice& lattice, const WaveFunction& wave_function,
+                                         BosonState& state, std::size_t sweep_count,
+                                         std::mt19937_64& rng) {
+  const std::size_t boson_count = state.boson_count();
+  if (boson_count != 0 && sweep_count > std::numeric_limits<std::size_t>::max() / boson_count) {
+    throw std::overflow_error("metropolis sweep count overflows step count");
+  }
+
+  return run_metropolis_steps(lattice, wave_function, state, sweep_count * boson_count, rng);
 }
 
 }  // namespace vmc
