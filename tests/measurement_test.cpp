@@ -35,6 +35,9 @@ TEST(MeasurementTest, ZeroSamplesOnlyRunsThermalization) {
   EXPECT_EQ(result.sampling_stats.proposed_steps, 0);
   EXPECT_EQ(result.sampling_stats.accepted_steps, 0);
   EXPECT_EQ(result.energy.count(), 0);
+  EXPECT_EQ(result.binned_energy.sample_count(), 0);
+  EXPECT_EQ(result.binned_energy.completed_bin_count(), 0);
+  EXPECT_EQ(result.binned_energy.bin_size(), 1);
 }
 
 TEST(MeasurementTest, RejectsSamplesWithoutSweepsBetweenSamples) {
@@ -72,6 +75,10 @@ TEST(MeasurementTest, MeasuresConstantTwoSiteOneBosonEnergy) {
   EXPECT_DOUBLE_EQ(result.energy.mean(), -2.0);
   EXPECT_DOUBLE_EQ(result.energy.variance(), 0.0);
   EXPECT_DOUBLE_EQ(result.energy.standard_error(), 0.0);
+  EXPECT_EQ(result.binned_energy.sample_count(), 5);
+  EXPECT_EQ(result.binned_energy.completed_bin_count(), 5);
+  EXPECT_EQ(result.binned_energy.current_bin_count(), 0);
+  EXPECT_DOUBLE_EQ(result.binned_energy.bin_stats().mean(), -2.0);
 }
 
 TEST(MeasurementTest, ZeroBosonSamplingRecordsStaticEnergy) {
@@ -91,6 +98,31 @@ TEST(MeasurementTest, ZeroBosonSamplingRecordsStaticEnergy) {
   EXPECT_EQ(result.sampling_stats.attempted_steps, 0);
   EXPECT_EQ(result.energy.count(), 3);
   EXPECT_DOUBLE_EQ(result.energy.mean(), 0.0);
+  EXPECT_EQ(result.binned_energy.sample_count(), 3);
+  EXPECT_EQ(result.binned_energy.completed_bin_count(), 3);
+}
+
+TEST(MeasurementTest, MeasuresBinnedEnergyWithCustomBinSize) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(2);
+  const BoseHubbardHamiltonian hamiltonian{
+      .hopping_t = 2.0,
+      .interaction_u = 0.0,
+  };
+  BosonState state = BosonState::from_boson_positions(2, {0}, OccupancyConstraint::SoftCore);
+
+  const EnergyRunResult result =
+      measure_local_energy(lattice, wave_function, hamiltonian, state, 0, 5, 1, 2, rng);
+
+  EXPECT_EQ(result.energy.count(), 5);
+  EXPECT_DOUBLE_EQ(result.energy.mean(), -2.0);
+  EXPECT_EQ(result.binned_energy.bin_size(), 2);
+  EXPECT_EQ(result.binned_energy.sample_count(), 5);
+  EXPECT_EQ(result.binned_energy.completed_bin_count(), 2);
+  EXPECT_EQ(result.binned_energy.current_bin_count(), 1);
+  EXPECT_DOUBLE_EQ(result.binned_energy.raw_stats().mean(), -2.0);
+  EXPECT_DOUBLE_EQ(result.binned_energy.bin_stats().mean(), -2.0);
 }
 
 }  // namespace

@@ -43,4 +43,48 @@ double RunningStats::standard_error() const {
   return standard_deviation() / std::sqrt(static_cast<double>(count_));
 }
 
+BinningStats::BinningStats(std::size_t bin_size) : bin_size_{bin_size} {
+  if (bin_size_ == 0) {
+    throw std::invalid_argument("bin size must be greater than zero");
+  }
+}
+
+void BinningStats::add(double value) {
+  raw_stats_.add(value);
+
+  ++sample_count_;
+  ++current_bin_count_;
+  current_bin_sum_ += value;
+
+  if (current_bin_count_ == bin_size_) {
+    bin_stats_.add(current_bin_sum_ / static_cast<double>(bin_size_));
+    current_bin_count_ = 0;
+    current_bin_sum_ = 0.0;
+  }
+}
+
+std::size_t BinningStats::bin_size() const {
+  return bin_size_;
+}
+
+std::size_t BinningStats::sample_count() const {
+  return sample_count_;
+}
+
+std::size_t BinningStats::completed_bin_count() const {
+  return bin_stats_.count();
+}
+
+std::size_t BinningStats::current_bin_count() const {
+  return current_bin_count_;
+}
+
+const RunningStats& BinningStats::raw_stats() const {
+  return raw_stats_;
+}
+
+const RunningStats& BinningStats::bin_stats() const {
+  return bin_stats_;
+}
+
 }  // namespace vmc
