@@ -14,6 +14,7 @@ using vmc::BosonState;
 using vmc::CondensateWaveFunction;
 using vmc::JastrowWaveFunction;
 using vmc::OccupancyConstraint;
+using vmc::ProductWaveFunction;
 using vmc::WaveFunction;
 
 TEST(WaveFunctionTest, BuildsUniformCondensate) {
@@ -248,6 +249,90 @@ TEST(WaveFunctionTest, JastrowRejectsHardCoreOccupiedDestination) {
   };
 
   EXPECT_THROW((void)wave_function.log_ratio(state, hop), std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, BuildsProductWaveFunction) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  const JastrowWaveFunction jastrow = JastrowWaveFunction::zero(3);
+  const ProductWaveFunction product{{condensate, jastrow}};
+
+  EXPECT_EQ(product.site_count(), 3);
+  EXPECT_EQ(product.component_count(), 2);
+}
+
+TEST(WaveFunctionTest, ProductRejectsEmptyComponents) {
+  EXPECT_THROW(ProductWaveFunction{{}}, std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, ProductRejectsMismatchedComponentSizes) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  const JastrowWaveFunction jastrow = JastrowWaveFunction::zero(4);
+
+  EXPECT_THROW(ProductWaveFunction({condensate, jastrow}), std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, ProductLogAmplitudeIsSumOfComponentLogAmplitudes) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(2);
+  Eigen::MatrixXd parameters(2, 2);
+  parameters << 0.2, 0.1, 0.1, 0.4;
+  const JastrowWaveFunction jastrow{parameters};
+  const ProductWaveFunction product{{condensate, jastrow}};
+  const BosonState state = BosonState::from_occupations({2, 1}, OccupancyConstraint::SoftCore);
+
+  const double expected = condensate.log_amplitude(state) + jastrow.log_amplitude(state);
+
+  EXPECT_DOUBLE_EQ(product.log_amplitude(state), expected);
+}
+
+TEST(WaveFunctionTest, ProductLogRatioIsSumOfComponentLogRatios) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(2);
+  Eigen::MatrixXd parameters(2, 2);
+  parameters << 0.2, 0.1, 0.1, 0.4;
+  const JastrowWaveFunction jastrow{parameters};
+  const ProductWaveFunction product{{condensate, jastrow}};
+  const BosonState state = BosonState::from_occupations({2, 1}, OccupancyConstraint::SoftCore);
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+
+  const double expected = condensate.log_ratio(state, hop) + jastrow.log_ratio(state, hop);
+
+  EXPECT_DOUBLE_EQ(product.log_ratio(state, hop), expected);
+}
+
+TEST(WaveFunctionTest, ProductRatioUsesBaseExponentiatedLogRatio) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(2);
+  Eigen::MatrixXd parameters(2, 2);
+  parameters << 0.2, 0.1, 0.1, 0.4;
+  const JastrowWaveFunction jastrow{parameters};
+  const ProductWaveFunction product{{condensate, jastrow}};
+  const BosonState state = BosonState::from_occupations({2, 1}, OccupancyConstraint::SoftCore);
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+  const WaveFunction& base = product;
+
+  EXPECT_DOUBLE_EQ(base.ratio(state, hop), std::exp(base.log_ratio(state, hop)));
+}
+
+TEST(WaveFunctionTest, ProductWithZeroJastrowMatchesCondensate) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  const JastrowWaveFunction jastrow = JastrowWaveFunction::zero(3);
+  const ProductWaveFunction product{{condensate, jastrow}};
+  const BosonState state = BosonState::from_occupations({2, 1, 0}, OccupancyConstraint::SoftCore);
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 2,
+  };
+
+  EXPECT_DOUBLE_EQ(product.log_amplitude(state), condensate.log_amplitude(state));
+  EXPECT_DOUBLE_EQ(product.log_ratio(state, hop), condensate.log_ratio(state, hop));
+  EXPECT_DOUBLE_EQ(product.ratio(state, hop), condensate.ratio(state, hop));
 }
 
 }  // namespace

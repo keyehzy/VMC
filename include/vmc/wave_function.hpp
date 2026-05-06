@@ -2,6 +2,8 @@
 
 #include <Eigen/Dense>
 #include <cstddef>
+#include <functional>
+#include <vector>
 
 #include "vmc/boson_state.hpp"
 #include "vmc/proposal.hpp"
@@ -49,6 +51,22 @@ class JastrowWaveFunction final : public WaveFunction {
 
  private:
   Eigen::MatrixXd parameters_;
+};
+
+class ProductWaveFunction final : public WaveFunction {
+ public:
+  explicit ProductWaveFunction(std::vector<std::reference_wrapper<const WaveFunction>> components);
+
+  [[nodiscard]] std::size_t site_count() const override;
+
+  [[nodiscard]] double log_amplitude(const BosonState& state) const override;
+  [[nodiscard]] double log_ratio(const BosonState& state, const BosonHop& hop) const override;
+
+  [[nodiscard]] std::size_t component_count() const;
+
+ private:
+  std::vector<std::reference_wrapper<const WaveFunction>> components_;
+  std::size_t site_count_;
 };
 
 }  // namespace vmc

@@ -90,6 +90,45 @@ double WaveFunction::ratio(const BosonState& state, const BosonHop& hop) const {
   return std::exp(log_ratio(state, hop));
 }
 
+ProductWaveFunction::ProductWaveFunction(
+    std::vector<std::reference_wrapper<const WaveFunction>> components)
+    : components_{std::move(components)}, site_count_{0} {
+  if (components_.empty()) {
+    throw std::invalid_argument("product wave function requires at least one component");
+  }
+
+  site_count_ = components_.front().get().site_count();
+  for (const WaveFunction& component : components_) {
+    if (component.site_count() != site_count_) {
+      throw std::invalid_argument("product wave function components must have the same site count");
+    }
+  }
+}
+
+std::size_t ProductWaveFunction::site_count() const {
+  return site_count_;
+}
+
+double ProductWaveFunction::log_amplitude(const BosonState& state) const {
+  double value = 0.0;
+  for (const WaveFunction& component : components_) {
+    value += component.log_amplitude(state);
+  }
+  return value;
+}
+
+double ProductWaveFunction::log_ratio(const BosonState& state, const BosonHop& hop) const {
+  double value = 0.0;
+  for (const WaveFunction& component : components_) {
+    value += component.log_ratio(state, hop);
+  }
+  return value;
+}
+
+std::size_t ProductWaveFunction::component_count() const {
+  return components_.size();
+}
+
 CondensateWaveFunction::CondensateWaveFunction(Eigen::VectorXd orbital)
     : orbital_{std::move(orbital)} {
   require_valid_orbital(orbital_);
