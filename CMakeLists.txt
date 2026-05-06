@@ -39,6 +39,7 @@ target_sources(
           src/measurement.cpp
           src/metropolis.cpp
           src/proposal.cpp
+          src/sr_optimizer.cpp
           src/sr_statistics.cpp
           src/statistics.cpp
           src/wave_function.cpp
@@ -84,6 +85,7 @@ if(VMC_BUILD_TESTS)
     tests/measurement_test.cpp
     tests/metropolis_test.cpp
     tests/proposal_test.cpp
+    tests/sr_optimizer_test.cpp
     tests/sr_statistics_test.cpp
     tests/statistics_test.cpp
     tests/wave_function_test.cpp
