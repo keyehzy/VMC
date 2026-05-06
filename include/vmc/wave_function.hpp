@@ -8,20 +8,47 @@
 
 namespace vmc {
 
-class CondensateWaveFunction {
+class WaveFunction {
+ public:
+  virtual ~WaveFunction() = default;
+
+  [[nodiscard]] virtual std::size_t site_count() const = 0;
+  [[nodiscard]] virtual double log_amplitude(const BosonState& state) const = 0;
+  [[nodiscard]] virtual double log_ratio(const BosonState& state, const BosonHop& hop) const = 0;
+
+  [[nodiscard]] double ratio(const BosonState& state, const BosonHop& hop) const;
+};
+
+class CondensateWaveFunction final : public WaveFunction {
  public:
   explicit CondensateWaveFunction(Eigen::VectorXd orbital);
 
   static CondensateWaveFunction uniform(std::size_t site_count);
 
-  [[nodiscard]] std::size_t site_count() const;
+  [[nodiscard]] std::size_t site_count() const override;
 
-  [[nodiscard]] double log_amplitude(const BosonState& state) const;
-  [[nodiscard]] double log_ratio(const BosonState& state, const BosonHop& hop) const;
-  [[nodiscard]] double ratio(const BosonState& state, const BosonHop& hop) const;
+  [[nodiscard]] double log_amplitude(const BosonState& state) const override;
+  [[nodiscard]] double log_ratio(const BosonState& state, const BosonHop& hop) const override;
 
  private:
   Eigen::VectorXd orbital_;
+};
+
+class JastrowWaveFunction final : public WaveFunction {
+ public:
+  explicit JastrowWaveFunction(Eigen::MatrixXd parameters);
+
+  static JastrowWaveFunction zero(std::size_t site_count);
+
+  [[nodiscard]] std::size_t site_count() const override;
+
+  [[nodiscard]] double log_amplitude(const BosonState& state) const override;
+  [[nodiscard]] double log_ratio(const BosonState& state, const BosonHop& hop) const override;
+
+  [[nodiscard]] const Eigen::MatrixXd& parameters() const;
+
+ private:
+  Eigen::MatrixXd parameters_;
 };
 
 }  // namespace vmc

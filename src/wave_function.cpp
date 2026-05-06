@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace vmc {
 namespace {
@@ -24,6 +26,28 @@ void require_valid_orbital(const Eigen::VectorXd& orbital) {
   }
 }
 
+void require_valid_jastrow_parameters(const Eigen::MatrixXd& parameters) {
+  if (parameters.rows() == 0 || parameters.cols() == 0) {
+    throw std::invalid_argument("Jastrow parameters must contain at least one site");
+  }
+
+  if (parameters.rows() != parameters.cols()) {
+    throw std::invalid_argument("Jastrow parameters must be square");
+  }
+
+  for (Eigen::Index row = 0; row < parameters.rows(); ++row) {
+    for (Eigen::Index col = 0; col < parameters.cols(); ++col) {
+      if (!std::isfinite(parameters(row, col))) {
+        throw std::invalid_argument("Jastrow parameters must be finite");
+      }
+    }
+  }
+
+  if (!parameters.isApprox(parameters.transpose())) {
+    throw std::invalid_argument("Jastrow parameters must be symmetric");
+  }
+}
+
 void require_valid_hop(const BosonState& state, const BosonHop& hop) {
   if (hop.source == hop.destination) {
     throw std::invalid_argument("wave-function ratios require a nontrivial hop");
@@ -42,7 +66,29 @@ void require_valid_hop(const BosonState& state, const BosonHop& hop) {
   }
 }
 
+std::vector<std::size_t> occupations_from_state(const BosonState& state) {
+  const auto occupations = state.occupations();
+  return {occupations.begin(), occupations.end()};
+}
+
+double jastrow_log_amplitude(const Eigen::MatrixXd& parameters,
+                             std::span<const std::size_t> occupations) {
+  double quadratic_form = 0.0;
+  for (std::size_t row = 0; row < occupations.size(); ++row) {
+    for (std::size_t col = 0; col < occupations.size(); ++col) {
+      quadratic_form += static_cast<double>(occupations[row]) * parameters(row, col) *
+                        static_cast<double>(occupations[col]);
+    }
+  }
+
+  return -0.5 * quadratic_form;
+}
+
 }  // namespace
+
+double WaveFunction::ratio(const BosonState& state, const BosonHop& hop) const {
+  return std::exp(log_ratio(state, hop));
+}
 
 CondensateWaveFunction::CondensateWaveFunction(Eigen::VectorXd orbital)
     : orbital_{std::move(orbital)} {
@@ -87,8 +133,44 @@ double CondensateWaveFunction::log_ratio(const BosonState& state, const BosonHop
                 std::log(static_cast<double>(destination_occupation + 1)));
 }
 
-double CondensateWaveFunction::ratio(const BosonState& state, const BosonHop& hop) const {
-  return std::exp(log_ratio(state, hop));
+JastrowWaveFunction::JastrowWaveFunction(Eigen::MatrixXd parameters)
+    : parameters_{std::move(parameters)} {
+  require_valid_jastrow_parameters(parameters_);
+}
+
+JastrowWaveFunction JastrowWaveFunction::zero(std::size_t site_count) {
+  if (site_count == 0) {
+    throw std::invalid_argument("zero Jastrow parameters must contain at least one site");
+  }
+
+  return JastrowWaveFunction{Eigen::MatrixXd::Zero(site_count, site_count)};
+}
+
+std::size_t JastrowWaveFunction::site_count() const {
+  return static_cast<std::size_t>(parameters_.rows());
+}
+
+double JastrowWaveFunction::log_amplitude(const BosonState& state) const {
+  require_state_size(state, site_count());
+  return jastrow_log_amplitude(parameters_, state.occupations());
+}
+
+double JastrowWaveFunction::log_ratio(const BosonState& state, const BosonHop& hop) const {
+  require_state_size(state, site_count());
+  require_valid_hop(state, hop);
+
+  auto after_occupations = occupations_from_state(state);
+  const double before = jastrow_log_amplitude(parameters_, after_occupations);
+
+  --after_occupations[hop.source];
+  ++after_occupations[hop.destination];
+  const double after = jastrow_log_amplitude(parameters_, after_occupations);
+
+  return after - before;
+}
+
+const Eigen::MatrixXd& JastrowWaveFunction::parameters() const {
+  return parameters_;
 }
 
 }  // namespace vmc
