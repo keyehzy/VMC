@@ -34,6 +34,7 @@ target_sources(
   PRIVATE src/boson_state.cpp
           src/initialization.cpp
           src/lattice.cpp
+          src/metropolis.cpp
           src/proposal.cpp
           src/wave_function.cpp
           src/version.cpp
@@ -73,6 +74,7 @@ if(VMC_BUILD_TESTS)
     tests/boson_state_test.cpp
     tests/initialization_test.cpp
     tests/lattice_test.cpp
+    tests/metropolis_test.cpp
     tests/proposal_test.cpp
     tests/wave_function_test.cpp
     tests/version_test.cpp
