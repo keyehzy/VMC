@@ -27,6 +27,9 @@ struct MetropolisRunStats {
   [[nodiscard]] double acceptance_rate() const;
 };
 
+MetropolisRunStats& operator+=(MetropolisRunStats& lhs, const MetropolisRunStats& rhs);
+[[nodiscard]] MetropolisRunStats operator+(MetropolisRunStats lhs, const MetropolisRunStats& rhs);
+
 MetropolisStepResult metropolis_step(const Lattice& lattice, const WaveFunction& wave_function,
                                      BosonState& state, std::mt19937_64& rng);
 

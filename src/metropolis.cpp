@@ -31,6 +31,18 @@ double MetropolisRunStats::acceptance_rate() const {
   return static_cast<double>(accepted_steps) / static_cast<double>(proposed_steps);
 }
 
+MetropolisRunStats& operator+=(MetropolisRunStats& lhs, const MetropolisRunStats& rhs) {
+  lhs.attempted_steps += rhs.attempted_steps;
+  lhs.proposed_steps += rhs.proposed_steps;
+  lhs.accepted_steps += rhs.accepted_steps;
+  return lhs;
+}
+
+MetropolisRunStats operator+(MetropolisRunStats lhs, const MetropolisRunStats& rhs) {
+  lhs += rhs;
+  return lhs;
+}
+
 MetropolisStepResult metropolis_step(const Lattice& lattice, const WaveFunction& wave_function,
                                      BosonState& state, std::mt19937_64& rng) {
   const std::optional<BosonHop> hop = propose_nearest_neighbor_hop(lattice, state, rng);

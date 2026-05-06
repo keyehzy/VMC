@@ -35,8 +35,10 @@ target_sources(
           src/hamiltonian.cpp
           src/initialization.cpp
           src/lattice.cpp
+          src/measurement.cpp
           src/metropolis.cpp
           src/proposal.cpp
+          src/statistics.cpp
           src/wave_function.cpp
           src/version.cpp
 )
@@ -76,8 +78,10 @@ if(VMC_BUILD_TESTS)
     tests/hamiltonian_test.cpp
     tests/initialization_test.cpp
     tests/lattice_test.cpp
+    tests/measurement_test.cpp
     tests/metropolis_test.cpp
     tests/proposal_test.cpp
+    tests/statistics_test.cpp
     tests/wave_function_test.cpp
     tests/version_test.cpp
   )

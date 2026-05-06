@@ -198,6 +198,46 @@ TEST(MetropolisTest, RunStatsComputeRates) {
   EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 0.5);
 }
 
+TEST(MetropolisTest, RunStatsAccumulate) {
+  MetropolisRunStats stats{
+      .attempted_steps = 8,
+      .proposed_steps = 6,
+      .accepted_steps = 3,
+  };
+  const MetropolisRunStats other{
+      .attempted_steps = 2,
+      .proposed_steps = 1,
+      .accepted_steps = 1,
+  };
+
+  stats += other;
+
+  EXPECT_EQ(stats.attempted_steps, 10);
+  EXPECT_EQ(stats.proposed_steps, 7);
+  EXPECT_EQ(stats.accepted_steps, 4);
+  EXPECT_DOUBLE_EQ(stats.proposal_rate(), 0.7);
+  EXPECT_DOUBLE_EQ(stats.acceptance_rate(), 4.0 / 7.0);
+}
+
+TEST(MetropolisTest, RunStatsAdd) {
+  const MetropolisRunStats lhs{
+      .attempted_steps = 8,
+      .proposed_steps = 6,
+      .accepted_steps = 3,
+  };
+  const MetropolisRunStats rhs{
+      .attempted_steps = 2,
+      .proposed_steps = 1,
+      .accepted_steps = 1,
+  };
+
+  const MetropolisRunStats stats = lhs + rhs;
+
+  EXPECT_EQ(stats.attempted_steps, 10);
+  EXPECT_EQ(stats.proposed_steps, 7);
+  EXPECT_EQ(stats.accepted_steps, 4);
+}
+
 TEST(MetropolisTest, RunStepsWithZeroStepsDoesNothing) {
   std::mt19937_64 rng{1234};
   const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
