@@ -12,6 +12,7 @@ namespace {
 
 using vmc::BosonHop;
 using vmc::BosonState;
+using vmc::CachedProductWaveFunction;
 using vmc::CondensateWaveFunction;
 using vmc::JastrowCache;
 using vmc::JastrowWaveFunction;
@@ -454,6 +455,95 @@ TEST(WaveFunctionTest, ProductWithZeroJastrowMatchesCondensate) {
   EXPECT_DOUBLE_EQ(product.log_amplitude(state), condensate.log_amplitude(state));
   EXPECT_DOUBLE_EQ(product.log_ratio(state, hop), condensate.log_ratio(state, hop));
   EXPECT_DOUBLE_EQ(product.ratio(state, hop), condensate.ratio(state, hop));
+}
+
+TEST(WaveFunctionTest, CachedProductLogRatioMatchesDirectProduct) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction jastrow{parameters};
+  const ProductWaveFunction direct_product{{condensate, jastrow}};
+  const BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+  const CachedProductWaveFunction cached_product{condensate, jastrow, state};
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+
+  EXPECT_EQ(cached_product.site_count(), 3);
+  EXPECT_DOUBLE_EQ(cached_product.log_ratio(state, hop), direct_product.log_ratio(state, hop));
+  EXPECT_DOUBLE_EQ(cached_product.ratio(state, hop),
+                   std::exp(cached_product.log_ratio(state, hop)));
+}
+
+TEST(WaveFunctionTest, CachedProductRejectsMismatchedInputs) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  const JastrowWaveFunction jastrow = JastrowWaveFunction::zero(4);
+  const BosonState state = BosonState::from_occupations({1, 0, 0}, OccupancyConstraint::SoftCore);
+
+  EXPECT_THROW(CachedProductWaveFunction(condensate, jastrow, state), std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, CachedProductStaysConsistentAfterAcceptedHop) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction jastrow{parameters};
+  BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+  CachedProductWaveFunction cached_product{condensate, jastrow, state};
+  const BosonHop accepted_hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+
+  state.move_boson(accepted_hop.boson, accepted_hop.destination);
+  cached_product.apply_accepted_hop(accepted_hop);
+
+  const ProductWaveFunction direct_product{{condensate, jastrow}};
+  const BosonHop next_hop{
+      .boson = 2,
+      .source = 2,
+      .destination = 0,
+  };
+
+  EXPECT_DOUBLE_EQ(cached_product.log_ratio(state, next_hop),
+                   direct_product.log_ratio(state, next_hop));
+}
+
+TEST(WaveFunctionTest, CachedProductStaysConsistentAfterMultipleAcceptedHops) {
+  const CondensateWaveFunction condensate = CondensateWaveFunction::uniform(3);
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction jastrow{parameters};
+  BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+  CachedProductWaveFunction cached_product{condensate, jastrow, state};
+  const BosonHop first_hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+  const BosonHop second_hop{
+      .boson = 2,
+      .source = 2,
+      .destination = 1,
+  };
+
+  state.move_boson(first_hop.boson, first_hop.destination);
+  cached_product.apply_accepted_hop(first_hop);
+  state.move_boson(second_hop.boson, second_hop.destination);
+  cached_product.apply_accepted_hop(second_hop);
+
+  const ProductWaveFunction direct_product{{condensate, jastrow}};
+  const BosonHop next_hop{
+      .boson = 1,
+      .source = 0,
+      .destination = 2,
+  };
+
+  EXPECT_DOUBLE_EQ(cached_product.log_ratio(state, next_hop),
+                   direct_product.log_ratio(state, next_hop));
 }
 
 }  // namespace

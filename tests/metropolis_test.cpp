@@ -45,6 +45,27 @@ class FixedLogRatioWaveFunction final : public WaveFunction {
   double log_ratio_;
 };
 
+class TrackingWaveFunction {
+ public:
+  explicit TrackingWaveFunction(double log_ratio) : log_ratio_{log_ratio} {}
+
+  [[nodiscard]] double log_ratio(const BosonState&, const BosonHop&) const {
+    return log_ratio_;
+  }
+
+  void apply_accepted_hop(const BosonHop&) {
+    ++accepted_update_count_;
+  }
+
+  [[nodiscard]] std::size_t accepted_update_count() const {
+    return accepted_update_count_;
+  }
+
+ private:
+  double log_ratio_;
+  std::size_t accepted_update_count_{0};
+};
+
 std::vector<std::size_t> occupations_of(const BosonState& state) {
   const auto occupations = state.occupations();
   return {occupations.begin(), occupations.end()};
@@ -151,6 +172,32 @@ TEST(MetropolisTest, RejectsMoveWhenAcceptanceDrawFails) {
   EXPECT_DOUBLE_EQ(result.acceptance_probability, std::exp(-40.0));
   EXPECT_THAT(occupations_of(state), ElementsAre(1, 0));
   EXPECT_THAT(positions_of(state), ElementsAre(0));
+}
+
+TEST(MetropolisTest, UpdatesStatefulWaveFunctionOnAcceptedMove) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  TrackingWaveFunction wave_function{0.0};
+  BosonState state = BosonState::from_boson_positions(2, {0}, OccupancyConstraint::SoftCore);
+
+  const MetropolisStepResult result = metropolis_step(lattice, wave_function, state, rng);
+
+  EXPECT_TRUE(result.accepted);
+  EXPECT_EQ(wave_function.accepted_update_count(), 1);
+  EXPECT_THAT(occupations_of(state), ElementsAre(0, 1));
+}
+
+TEST(MetropolisTest, DoesNotUpdateStatefulWaveFunctionOnRejectedMove) {
+  std::mt19937_64 rng{1234};
+  const Lattice lattice = Lattice::chain(2, BoundaryCondition::Open);
+  TrackingWaveFunction wave_function{-20.0};
+  BosonState state = BosonState::from_boson_positions(2, {0}, OccupancyConstraint::SoftCore);
+
+  const MetropolisStepResult result = metropolis_step(lattice, wave_function, state, rng);
+
+  EXPECT_FALSE(result.accepted);
+  EXPECT_EQ(wave_function.accepted_update_count(), 0);
+  EXPECT_THAT(occupations_of(state), ElementsAre(1, 0));
 }
 
 TEST(MetropolisTest, SameSeedProducesSameTransition) {

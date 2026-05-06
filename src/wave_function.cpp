@@ -151,6 +151,32 @@ std::size_t ProductWaveFunction::component_count() const {
   return components_.size();
 }
 
+CachedProductWaveFunction::CachedProductWaveFunction(const CondensateWaveFunction& condensate,
+                                                     const JastrowWaveFunction& jastrow,
+                                                     const BosonState& state)
+    : condensate_{condensate}, jastrow_{jastrow}, jastrow_cache_{jastrow, state} {
+  if (condensate.site_count() != jastrow.site_count()) {
+    throw std::invalid_argument("cached product components must have the same site count");
+  }
+  require_state_size(state, condensate.site_count());
+}
+
+std::size_t CachedProductWaveFunction::site_count() const {
+  return condensate_.get().site_count();
+}
+
+double CachedProductWaveFunction::log_ratio(const BosonState& state, const BosonHop& hop) const {
+  return condensate_.get().log_ratio(state, hop) + jastrow_cache_.log_ratio(state, hop);
+}
+
+double CachedProductWaveFunction::ratio(const BosonState& state, const BosonHop& hop) const {
+  return std::exp(log_ratio(state, hop));
+}
+
+void CachedProductWaveFunction::apply_accepted_hop(const BosonHop& hop) {
+  jastrow_cache_.apply_accepted_hop(hop);
+}
+
 CondensateWaveFunction::CondensateWaveFunction(Eigen::VectorXd orbital)
     : orbital_{std::move(orbital)} {
   require_valid_orbital(orbital_);

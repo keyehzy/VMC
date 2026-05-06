@@ -87,4 +87,22 @@ class ProductWaveFunction final : public WaveFunction {
   std::size_t site_count_;
 };
 
+class CachedProductWaveFunction {
+ public:
+  CachedProductWaveFunction(const CondensateWaveFunction& condensate,
+                            const JastrowWaveFunction& jastrow, const BosonState& state);
+
+  [[nodiscard]] std::size_t site_count() const;
+
+  [[nodiscard]] double log_ratio(const BosonState& state, const BosonHop& hop) const;
+  [[nodiscard]] double ratio(const BosonState& state, const BosonHop& hop) const;
+
+  void apply_accepted_hop(const BosonHop& hop);
+
+ private:
+  std::reference_wrapper<const CondensateWaveFunction> condensate_;
+  std::reference_wrapper<const JastrowWaveFunction> jastrow_;
+  JastrowCache jastrow_cache_;
+};
+
 }  // namespace vmc
