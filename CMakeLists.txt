@@ -41,6 +41,7 @@ target_sources(
           src/proposal.cpp
           src/sr_iteration.cpp
           src/sr_optimizer.cpp
+          src/sr_optimization.cpp
           src/sr_statistics.cpp
           src/statistics.cpp
           src/wave_function.cpp
@@ -88,6 +89,7 @@ if(VMC_BUILD_TESTS)
     tests/proposal_test.cpp
     tests/sr_iteration_test.cpp
     tests/sr_optimizer_test.cpp
+    tests/sr_optimization_test.cpp
     tests/sr_statistics_test.cpp
     tests/statistics_test.cpp
     tests/wave_function_test.cpp
