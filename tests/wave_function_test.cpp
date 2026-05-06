@@ -6,16 +6,30 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace {
 
 using vmc::BosonHop;
 using vmc::BosonState;
 using vmc::CondensateWaveFunction;
+using vmc::JastrowCache;
 using vmc::JastrowWaveFunction;
 using vmc::OccupancyConstraint;
 using vmc::ProductWaveFunction;
 using vmc::WaveFunction;
+
+std::vector<double> cache_values(const JastrowCache& cache) {
+  const auto values = cache.values();
+  return {values.begin(), values.end()};
+}
+
+void expect_cache_values_near(const JastrowCache& lhs, const JastrowCache& rhs) {
+  ASSERT_EQ(lhs.values().size(), rhs.values().size());
+  for (std::size_t i = 0; i < lhs.values().size(); ++i) {
+    EXPECT_NEAR(lhs.values()[i], rhs.values()[i], 1.0e-12);
+  }
+}
 
 TEST(WaveFunctionTest, BuildsUniformCondensate) {
   const CondensateWaveFunction wave_function = CondensateWaveFunction::uniform(4);
@@ -249,6 +263,113 @@ TEST(WaveFunctionTest, JastrowRejectsHardCoreOccupiedDestination) {
   };
 
   EXPECT_THROW((void)wave_function.log_ratio(state, hop), std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, JastrowCacheBuildsInitialValues) {
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction wave_function{parameters};
+  const BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+
+  const JastrowCache cache{wave_function, state};
+
+  EXPECT_EQ(cache.site_count(), 3);
+  EXPECT_THAT(cache_values(cache), testing::ElementsAre(testing::DoubleNear(0.1, 1.0e-12),
+                                                        testing::DoubleNear(0.7, 1.0e-12),
+                                                        testing::DoubleNear(0.1, 1.0e-12)));
+}
+
+TEST(WaveFunctionTest, JastrowCacheMatchesDirectLogRatio) {
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction wave_function{parameters};
+  const BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+  const JastrowCache cache{wave_function, state};
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+
+  EXPECT_DOUBLE_EQ(cache.log_ratio(state, hop), wave_function.log_ratio(state, hop));
+  EXPECT_DOUBLE_EQ(cache.ratio(state, hop), std::exp(cache.log_ratio(state, hop)));
+}
+
+TEST(WaveFunctionTest, JastrowCacheUpdateMatchesFreshCacheAfterAcceptedHop) {
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction wave_function{parameters};
+  BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+  JastrowCache cache{wave_function, state};
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+
+  state.move_boson(hop.boson, hop.destination);
+  cache.apply_accepted_hop(hop);
+  const JastrowCache fresh_cache{wave_function, state};
+
+  expect_cache_values_near(cache, fresh_cache);
+}
+
+TEST(WaveFunctionTest, JastrowCacheStaysConsistentAcrossMultipleAcceptedHops) {
+  Eigen::MatrixXd parameters(3, 3);
+  parameters << 0.2, 0.1, -0.3, 0.1, 0.4, 0.5, -0.3, 0.5, 0.7;
+  const JastrowWaveFunction wave_function{parameters};
+  BosonState state = BosonState::from_occupations({2, 0, 1}, OccupancyConstraint::SoftCore);
+  JastrowCache cache{wave_function, state};
+  const BosonHop first_hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+  const BosonHop second_hop{
+      .boson = 2,
+      .source = 2,
+      .destination = 1,
+  };
+
+  state.move_boson(first_hop.boson, first_hop.destination);
+  cache.apply_accepted_hop(first_hop);
+  state.move_boson(second_hop.boson, second_hop.destination);
+  cache.apply_accepted_hop(second_hop);
+  const JastrowCache fresh_cache{wave_function, state};
+
+  expect_cache_values_near(cache, fresh_cache);
+}
+
+TEST(WaveFunctionTest, JastrowCacheRejectsStateSizeMismatch) {
+  const JastrowWaveFunction wave_function = JastrowWaveFunction::zero(3);
+  const BosonState state = BosonState::from_occupations({1, 0}, OccupancyConstraint::SoftCore);
+
+  EXPECT_THROW(JastrowCache(wave_function, state), std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, JastrowCacheRejectsHardCoreOccupiedDestination) {
+  const JastrowWaveFunction wave_function = JastrowWaveFunction::zero(2);
+  const BosonState state =
+      BosonState::from_boson_positions(2, {0, 1}, OccupancyConstraint::HardCore);
+  const JastrowCache cache{wave_function, state};
+  const BosonHop hop{
+      .boson = 0,
+      .source = 0,
+      .destination = 1,
+  };
+
+  EXPECT_THROW((void)cache.log_ratio(state, hop), std::invalid_argument);
+}
+
+TEST(WaveFunctionTest, JastrowCacheRejectsInvalidUpdateHop) {
+  const JastrowWaveFunction wave_function = JastrowWaveFunction::zero(2);
+  const BosonState state = BosonState::from_boson_positions(2, {0}, OccupancyConstraint::SoftCore);
+  JastrowCache cache{wave_function, state};
+
+  EXPECT_THROW(cache.apply_accepted_hop(BosonHop{.boson = 0, .source = 0, .destination = 0}),
+               std::invalid_argument);
+  EXPECT_THROW(cache.apply_accepted_hop(BosonHop{.boson = 0, .source = 0, .destination = 2}),
+               std::out_of_range);
 }
 
 TEST(WaveFunctionTest, BuildsProductWaveFunction) {

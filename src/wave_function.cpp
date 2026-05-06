@@ -84,6 +84,28 @@ double jastrow_log_amplitude(const Eigen::MatrixXd& parameters,
   return -0.5 * quadratic_form;
 }
 
+std::vector<double> jastrow_cache_values(const JastrowWaveFunction& wave_function,
+                                         const BosonState& state) {
+  require_state_size(state, wave_function.site_count());
+
+  const Eigen::MatrixXd& parameters = wave_function.parameters();
+  std::vector<double> values(state.site_count(), 0.0);
+
+  for (BosonState::Site col = 0; col < state.site_count(); ++col) {
+    for (BosonState::Site row = 0; row < state.site_count(); ++row) {
+      values[col] += parameters(row, col) * static_cast<double>(state.occupation(row));
+    }
+  }
+
+  return values;
+}
+
+void require_site_in_cache_range(BosonState::Site site, std::size_t site_count) {
+  if (site >= site_count) {
+    throw std::out_of_range("Jastrow cache hop site is outside the wave function");
+  }
+}
+
 }  // namespace
 
 double WaveFunction::ratio(const BosonState& state, const BosonHop& hop) const {
@@ -210,6 +232,48 @@ double JastrowWaveFunction::log_ratio(const BosonState& state, const BosonHop& h
 
 const Eigen::MatrixXd& JastrowWaveFunction::parameters() const {
   return parameters_;
+}
+
+JastrowCache::JastrowCache(const JastrowWaveFunction& wave_function, const BosonState& state)
+    : wave_function_{wave_function}, values_{jastrow_cache_values(wave_function, state)} {}
+
+std::size_t JastrowCache::site_count() const {
+  return values_.size();
+}
+
+std::span<const double> JastrowCache::values() const {
+  return values_;
+}
+
+double JastrowCache::log_ratio(const BosonState& state, const BosonHop& hop) const {
+  const JastrowWaveFunction& wave_function = wave_function_.get();
+  require_state_size(state, site_count());
+  require_state_size(state, wave_function.site_count());
+  require_valid_hop(state, hop);
+
+  const Eigen::MatrixXd& parameters = wave_function.parameters();
+  const double quadratic_delta = parameters(hop.destination, hop.destination) +
+                                 parameters(hop.source, hop.source) -
+                                 2.0 * parameters(hop.destination, hop.source);
+
+  return values_[hop.source] - values_[hop.destination] - 0.5 * quadratic_delta;
+}
+
+double JastrowCache::ratio(const BosonState& state, const BosonHop& hop) const {
+  return std::exp(log_ratio(state, hop));
+}
+
+void JastrowCache::apply_accepted_hop(const BosonHop& hop) {
+  require_site_in_cache_range(hop.source, site_count());
+  require_site_in_cache_range(hop.destination, site_count());
+  if (hop.source == hop.destination) {
+    throw std::invalid_argument("Jastrow cache updates require a nontrivial hop");
+  }
+
+  const Eigen::MatrixXd& parameters = wave_function_.get().parameters();
+  for (BosonState::Site site = 0; site < site_count(); ++site) {
+    values_[site] += parameters(hop.destination, site) - parameters(hop.source, site);
+  }
 }
 
 }  // namespace vmc
