@@ -35,6 +35,7 @@ target_sources(
           src/initialization.cpp
           src/lattice.cpp
           src/proposal.cpp
+          src/wave_function.cpp
           src/version.cpp
 )
 target_include_directories(
@@ -73,6 +74,7 @@ if(VMC_BUILD_TESTS)
     tests/initialization_test.cpp
     tests/lattice_test.cpp
     tests/proposal_test.cpp
+    tests/wave_function_test.cpp
     tests/version_test.cpp
   )
   target_link_libraries(vmc_tests PRIVATE vmc_core GTest::gtest_main GTest::gmock)
