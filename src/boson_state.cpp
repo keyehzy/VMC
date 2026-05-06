@@ -121,6 +121,18 @@ BosonState::Site BosonState::boson_position(Boson boson) const {
   return boson_positions_[boson];
 }
 
+std::optional<BosonState::Boson> BosonState::first_boson_at(Site site) const {
+  require_site_in_range(site, site_count());
+
+  for (Boson boson = 0; boson < boson_positions_.size(); ++boson) {
+    if (boson_positions_[boson] == site) {
+      return boson;
+    }
+  }
+
+  return std::nullopt;
+}
+
 bool BosonState::is_hardcore() const {
   return constraint_ == OccupancyConstraint::HardCore;
 }

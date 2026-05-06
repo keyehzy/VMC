@@ -109,6 +109,16 @@ TEST(BosonStateTest, MovesSoftCoreBosonIntoOccupiedSite) {
   EXPECT_THAT(positions_of(state), ElementsAre(1, 1));
 }
 
+TEST(BosonStateTest, FindsFirstBosonAtSite) {
+  const BosonState state =
+      BosonState::from_boson_positions(4, {3, 1, 3, 2}, OccupancyConstraint::SoftCore);
+
+  EXPECT_EQ(state.first_boson_at(1), 1);
+  EXPECT_EQ(state.first_boson_at(2), 3);
+  EXPECT_EQ(state.first_boson_at(3), 0);
+  EXPECT_EQ(state.first_boson_at(0), std::nullopt);
+}
+
 TEST(BosonStateTest, RejectsInvalidConstructionInputs) {
   EXPECT_THROW(BosonState::empty(0, OccupancyConstraint::SoftCore), std::invalid_argument);
   EXPECT_THROW(BosonState::from_occupations({}, OccupancyConstraint::SoftCore),
@@ -124,6 +134,7 @@ TEST(BosonStateTest, RejectsInvalidSiteAndBosonAccess) {
 
   EXPECT_THROW((void)state.occupation(3), std::out_of_range);
   EXPECT_THROW((void)state.boson_position(1), std::out_of_range);
+  EXPECT_THROW((void)state.first_boson_at(3), std::out_of_range);
   EXPECT_THROW((void)state.can_move(1, 2), std::out_of_range);
   EXPECT_THROW((void)state.can_move(0, 3), std::out_of_range);
 }

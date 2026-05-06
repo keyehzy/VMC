@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -33,6 +34,7 @@ class BosonState {
 
   [[nodiscard]] std::size_t occupation(Site site) const;
   [[nodiscard]] Site boson_position(Boson boson) const;
+  [[nodiscard]] std::optional<Boson> first_boson_at(Site site) const;
 
   [[nodiscard]] bool is_hardcore() const;
   [[nodiscard]] bool can_move(Boson boson, Site destination) const;

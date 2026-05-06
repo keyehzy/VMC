@@ -32,6 +32,7 @@ add_library(vmc_core)
 target_sources(
   vmc_core
   PRIVATE src/boson_state.cpp
+          src/hamiltonian.cpp
           src/initialization.cpp
           src/lattice.cpp
           src/metropolis.cpp
@@ -72,6 +73,7 @@ if(VMC_BUILD_TESTS)
   add_executable(
     vmc_tests
     tests/boson_state_test.cpp
+    tests/hamiltonian_test.cpp
     tests/initialization_test.cpp
     tests/lattice_test.cpp
     tests/metropolis_test.cpp
