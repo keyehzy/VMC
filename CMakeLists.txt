@@ -34,6 +34,7 @@ target_sources(
   PRIVATE src/boson_state.cpp
           src/hamiltonian.cpp
           src/initialization.cpp
+          src/jastrow_parameterization.cpp
           src/lattice.cpp
           src/measurement.cpp
           src/metropolis.cpp
@@ -77,6 +78,7 @@ if(VMC_BUILD_TESTS)
     tests/boson_state_test.cpp
     tests/hamiltonian_test.cpp
     tests/initialization_test.cpp
+    tests/jastrow_parameterization_test.cpp
     tests/lattice_test.cpp
     tests/measurement_test.cpp
     tests/metropolis_test.cpp
