@@ -39,6 +39,7 @@ target_sources(
           src/measurement.cpp
           src/metropolis.cpp
           src/proposal.cpp
+          src/run_config.cpp
           src/sr_iteration.cpp
           src/sr_optimizer.cpp
           src/sr_optimization.cpp
@@ -87,6 +88,7 @@ if(VMC_BUILD_TESTS)
     tests/measurement_test.cpp
     tests/metropolis_test.cpp
     tests/proposal_test.cpp
+    tests/run_config_test.cpp
     tests/sr_iteration_test.cpp
     tests/sr_optimizer_test.cpp
     tests/sr_optimization_test.cpp

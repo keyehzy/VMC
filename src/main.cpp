@@ -1,6 +1,5 @@
 #include <Eigen/Dense>
 #include <cstddef>
-#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <random>
@@ -9,6 +8,7 @@
 #include "vmc/initialization.hpp"
 #include "vmc/jastrow_parameterization.hpp"
 #include "vmc/lattice.hpp"
+#include "vmc/run_config.hpp"
 #include "vmc/sr_optimization.hpp"
 #include "vmc/version.hpp"
 #include "vmc/wave_function.hpp"
@@ -26,64 +26,67 @@ void print_vector(const char* label, const Eigen::VectorXd& values) {
   std::cout << "]\n";
 }
 
+const char* occupancy_label(vmc::OccupancyConstraint constraint) {
+  switch (constraint) {
+    case vmc::OccupancyConstraint::HardCore:
+      return "hard-core";
+    case vmc::OccupancyConstraint::SoftCore:
+      return "soft-core";
+  }
+  return "unknown";
+}
+
 }  // namespace
 
-int main() {
-  constexpr std::uint64_t seed = 1234;
-  constexpr std::size_t chain_length = 8;
-  constexpr std::size_t boson_count = 4;
-  constexpr std::size_t max_iterations = 6;
-  constexpr std::size_t thermalization_sweeps = 50;
-  constexpr std::size_t sample_count = 400;
-  constexpr std::size_t sweeps_between_samples = 1;
+int main(int argc, char* argv[]) {
+  vmc::ParsedRunConfig parsed_config;
+  try {
+    parsed_config = vmc::parse_run_config(argc, argv);
+  } catch (const std::exception& error) {
+    std::cerr << error.what() << "\n\n" << vmc::usage(argv[0]);
+    return 2;
+  }
 
-  std::mt19937_64 rng{seed};
+  if (parsed_config.help_requested) {
+    std::cout << vmc::usage(argv[0]);
+    return 0;
+  }
 
-  const vmc::Lattice lattice = vmc::Lattice::chain(chain_length, vmc::BoundaryCondition::Periodic);
+  const vmc::RunConfig& config = parsed_config.config;
+
+  std::mt19937_64 rng{config.seed};
+
+  const vmc::Lattice lattice =
+      vmc::Lattice::chain(config.chain_length, vmc::BoundaryCondition::Periodic);
   vmc::BosonState state =
-      vmc::initialize_boson_state(lattice, boson_count, vmc::OccupancyConstraint::HardCore, rng);
+      vmc::initialize_boson_state(lattice, config.boson_count, config.occupancy_constraint, rng);
 
   const vmc::CondensateWaveFunction condensate =
       vmc::CondensateWaveFunction::uniform(lattice.site_count());
   vmc::DistanceJastrowParameterization jastrow_parameters =
       vmc::DistanceJastrowParameterization::periodic_chain(lattice.site_count());
 
-  const vmc::BoseHubbardHamiltonian hamiltonian{
-      .hopping_t = 1.0,
-      .interaction_u = 0.0,
-  };
-
-  const vmc::SrOptimizationConfig optimization_config{
-      .max_iterations = max_iterations,
-      .energy_tolerance = 1.0e-4,
-      .iteration =
-          vmc::SrIterationConfig{
-              .thermalization_sweeps = thermalization_sweeps,
-              .sample_count = sample_count,
-              .sweeps_between_samples = sweeps_between_samples,
-              .update =
-                  vmc::SrUpdateConfig{
-                      .step_size = 0.05,
-                      .diagonal_shift = 0.1,
-                  },
-          },
-  };
-
   const vmc::SrOptimizationResult result = vmc::run_sr_optimization(
-      lattice, condensate, jastrow_parameters, hamiltonian, state, optimization_config, rng);
+      lattice, condensate, jastrow_parameters, config.hamiltonian, state, config.optimization, rng);
 
   std::cout << std::fixed << std::setprecision(6);
   std::cout << "VMC " << vmc::version() << '\n';
-  std::cout << "lattice: periodic chain, L=" << chain_length << '\n';
-  std::cout << "bosons: Nb=" << boson_count << ", hard-core\n";
+  std::cout << "seed: " << config.seed << '\n';
+  std::cout << "lattice: periodic chain, L=" << config.chain_length << '\n';
+  std::cout << "bosons: Nb=" << config.boson_count << ", "
+            << occupancy_label(config.occupancy_constraint) << '\n';
+  std::cout << "hamiltonian: t=" << config.hamiltonian.hopping_t
+            << ", U=" << config.hamiltonian.interaction_u << '\n';
   std::cout << "optimization: iterations=" << result.history.size()
             << ", converged=" << std::boolalpha << result.converged
-            << ", energy_tolerance=" << optimization_config.energy_tolerance << '\n';
-  std::cout << "sampling: samples_per_iteration=" << sample_count
-            << ", thermalization_sweeps=" << thermalization_sweeps
-            << ", sweeps_between_samples=" << sweeps_between_samples << '\n';
-  std::cout << "sr_update: step_size=" << optimization_config.iteration.update.step_size
-            << ", diagonal_shift=" << optimization_config.iteration.update.diagonal_shift << '\n';
+            << ", max_iterations=" << config.optimization.max_iterations
+            << ", energy_tolerance=" << config.optimization.energy_tolerance << '\n';
+  std::cout << "sampling: samples_per_iteration=" << config.optimization.iteration.sample_count
+            << ", thermalization_sweeps=" << config.optimization.iteration.thermalization_sweeps
+            << ", sweeps_between_samples=" << config.optimization.iteration.sweeps_between_samples
+            << '\n';
+  std::cout << "sr_update: step_size=" << config.optimization.iteration.update.step_size
+            << ", diagonal_shift=" << config.optimization.iteration.update.diagonal_shift << '\n';
 
   std::cout << "history:\n";
   for (const vmc::SrOptimizationHistoryEntry& entry : result.history) {
